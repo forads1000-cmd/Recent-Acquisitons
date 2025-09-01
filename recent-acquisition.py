@@ -2,12 +2,30 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import re
-import csv
 from datetime import datetime, timedelta
 import pandas as pd
 
-SEARCH_TERMS = ["acquisition India", "merger India", "M&A India"]
+# Business-focused queries
+SEARCH_TERMS = [
+    "company acquisition India",
+    "corporate acquisition India",
+    "startup acquisition India",
+    "merger and acquisition India",
+    "business acquisition India"
+]
+
+# Time window: last 90 days
 cutoff_date = datetime.now() - timedelta(days=90)
+
+# Keyword filters
+EXCLUDE_KEYWORDS = [
+    "land acquisition", "government", "railway", "submarine", "army",
+    "navy", "missile", "defence", "defense", "property", "road"
+]
+
+INCLUDE_KEYWORDS = [
+    "company", "startup", "merger", "acquires", "buys", "stake", "deal", "subsidiary", "investment"
+]
 
 def clean_text(text):
     return re.sub(r"\s+", " ", text).strip()
@@ -25,6 +43,14 @@ def extract_companies(title):
             return clean_text(m.group(1)), clean_text(m.group(2))
     return None, None
 
+def is_relevant(title):
+    title_lower = title.lower()
+    if any(word in title_lower for word in EXCLUDE_KEYWORDS):
+        return False
+    if any(word in title_lower for word in INCLUDE_KEYWORDS):
+        return True
+    return False
+
 def fetch_articles(query):
     url = f"https://news.google.com/rss/search?q={query}&hl=en-IN&gl=IN&ceid=IN:en"
     r = requests.get(url)
@@ -34,6 +60,9 @@ def fetch_articles(query):
     results = []
     for item in items:
         title = item.title.text
+        if not is_relevant(title):
+            continue
+        
         link = item.link.text
         pub_date = datetime.strptime(item.pubDate.text, "%a, %d %b %Y %H:%M:%S %Z")
         
@@ -53,7 +82,7 @@ def fetch_articles(query):
 
 def main():
     st.title("📊 Recent Acquisitions in India")
-    st.write("Fetching acquisition/merger news from the past 3 months...")
+    st.write("Fetching acquisition/merger news from the past 3 months (business-focused only).")
 
     all_results = []
     for term in SEARCH_TERMS:
@@ -63,7 +92,7 @@ def main():
     df = pd.DataFrame(unique_results)
 
     if not df.empty:
-        st.success(f"Found {len(df)} results")
+        st.success(f"Found {len(df)} relevant results")
         st.dataframe(df)
 
         # Download button
@@ -75,7 +104,7 @@ def main():
             mime="text/csv"
         )
     else:
-        st.warning("No recent acquisitions found.")
+        st.warning("No relevant acquisitions found.")
 
 if __name__ == "__main__":
     main()
