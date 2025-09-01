@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 import re
 from datetime import datetime, timedelta
 import pandas as pd
+import io
 
 # Business-focused queries
 SEARCH_TERMS = [
@@ -95,14 +96,30 @@ def main():
         st.success(f"Found {len(df)} relevant results")
         st.dataframe(df)
 
-        # Download button
-        csv = df.to_csv(index=False).encode("utf-8")
+        # --- Export to Excel with hyperlinks ---
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df.to_excel(writer, sheet_name="Deals", index=False)
+            workbook  = writer.book
+            worksheet = writer.sheets["Deals"]
+
+            # Find column indexes
+            title_col = df.columns.get_loc("title")
+            link_col = df.columns.get_loc("link")
+
+            # Replace title with hyperlink
+            for row in range(len(df)):
+                url = df.iloc[row, link_col]
+                text = df.iloc[row, title_col]
+                worksheet.write_url(row + 1, title_col, url, string=text)
+
         st.download_button(
-            label="💾 Download CSV",
-            data=csv,
-            file_name=f"india_mna_{datetime.now().date()}.csv",
-            mime="text/csv"
+            label="📥 Download Excel with Hyperlinks",
+            data=output.getvalue(),
+            file_name=f"india_mna_{datetime.now().date()}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
     else:
         st.warning("No relevant acquisitions found.")
 
