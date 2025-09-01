@@ -1,22 +1,18 @@
+import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import re
 import csv
 from datetime import datetime, timedelta
+import pandas as pd
 
-# Define search keywords
 SEARCH_TERMS = ["acquisition India", "merger India", "M&A India"]
-
-# Time window: last 90 days
 cutoff_date = datetime.now() - timedelta(days=90)
 
-# Helper: clean text
 def clean_text(text):
     return re.sub(r"\s+", " ", text).strip()
 
-# Helper: try to extract buyer and target names from headline
 def extract_companies(title):
-    # Very naive rule: "X acquires Y" or "X buys Y"
     patterns = [
         r"(.+?) acquires (.+)",
         r"(.+?) buys (.+)",
@@ -29,7 +25,6 @@ def extract_companies(title):
             return clean_text(m.group(1)), clean_text(m.group(2))
     return None, None
 
-# Fetch articles from Google News RSS
 def fetch_articles(query):
     url = f"https://news.google.com/rss/search?q={query}&hl=en-IN&gl=IN&ceid=IN:en"
     r = requests.get(url)
@@ -56,19 +51,31 @@ def fetch_articles(query):
         })
     return results
 
-# Collect from all search terms
-all_results = []
-for term in SEARCH_TERMS:
-    all_results.extend(fetch_articles(term))
+def main():
+    st.title("📊 Recent Acquisitions in India")
+    st.write("Fetching acquisition/merger news from the past 3 months...")
 
-# Deduplicate by title
-unique_results = {r["title"]: r for r in all_results}.values()
+    all_results = []
+    for term in SEARCH_TERMS:
+        all_results.extend(fetch_articles(term))
 
-# Save to CSV
-filename = f"india_mna_deals_{datetime.now().date()}.csv"
-with open(filename, "w", newline="", encoding="utf-8") as f:
-    writer = csv.DictWriter(f, fieldnames=["date", "buyer", "target", "title", "link"])
-    writer.writeheader()
-    writer.writerows(unique_results)
+    unique_results = {r["title"]: r for r in all_results}.values()
+    df = pd.DataFrame(unique_results)
 
-print(f"✅ Saved {len(unique_results)} results to {filename}")
+    if not df.empty:
+        st.success(f"Found {len(df)} results")
+        st.dataframe(df)
+
+        # Download button
+        csv = df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="💾 Download CSV",
+            data=csv,
+            file_name=f"india_mna_{datetime.now().date()}.csv",
+            mime="text/csv"
+        )
+    else:
+        st.warning("No recent acquisitions found.")
+
+if __name__ == "__main__":
+    main()
